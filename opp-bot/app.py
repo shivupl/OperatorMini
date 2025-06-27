@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from gpt_parser import brower_instructions
+from gpt_parser import browser_instructions
 from automation import run_script
 
 app = Flask(__name__)
@@ -8,7 +8,7 @@ app = Flask(__name__)
 def automate():
     prompt = request.json.get("prompt")
     try:
-        json_plan = brower_instructions(prompt)
+        json_plan = browser_instructions(prompt)
         run_script(json_plan)
         return jsonify({"status": "success", "message": json_plan})
     except Exception as e:

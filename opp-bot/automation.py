@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 def run_script(json_script):
     actions = json.loads(json_script)
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False, slow_mo=100)
         page = browser.new_page()
 
         for step in actions:
@@ -15,6 +15,8 @@ def run_script(json_script):
                     page.fill(step["selector"], step["text"])
                 case "click":
                     page.click(step["selector"])
+                case "press":
+                    page.press(step["selector"], step["key"])
                 case "wait":
                     page.wait_for_timeout(step.get("seconds", 2) * 1000)
                 case "waitForSelector":
