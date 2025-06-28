@@ -21,6 +21,8 @@ def browser_instructions(prompt):
     - press: { "action": "press", "selector": "...", "key": "Enter" }
     - waitForSelector: { "action": "waitForSelector", "selector": "..." }
     - screenshot: { "action": "screenshot", "selector": "...", "path": "filename.png" }
+    - extractText: { "action": "extractText", "selector": "..." }
+    - scrollIntoView: { "action": "scrollIntoView", "selector": "..." }
 
     Requirements:
     - Use "press" instead of "click" to submit search bars when appropriate.

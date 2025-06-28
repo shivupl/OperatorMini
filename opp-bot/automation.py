@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 def run_script(json_script):
     actions = json.loads(json_script)
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, slow_mo=100)
+        browser = p.chromium.launch(headless=False, slow_mo=600)
         page = browser.new_page()
 
         for step in actions:
@@ -23,6 +23,12 @@ def run_script(json_script):
                     page.wait_for_selector(step["selector"])
                 case "screenshot":
                     page.screenshot(path=step["path"])
+                case "extractText":
+                    text = page.locator(step["selector"]).inner_text()
+                    print("Extracted text:", text)
+                case "scrollIntoView":
+                    page.locator(step["selector"]).scroll_into_view_if_needed()
+                
         browser.close()
 
         
