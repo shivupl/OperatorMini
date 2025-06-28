@@ -1,7 +1,7 @@
 import requests
 
 response = requests.post("http://localhost:5000/automate", json={
-    "prompt": "Go to the wikipedia page for the golden retriever and scroll to the bottom of the page and wait for 10 seconds"
+    "prompt": "Go to Wikipedia, search for 'Alan Turing', and open the article about him."
 })
 
 print(response.json())
