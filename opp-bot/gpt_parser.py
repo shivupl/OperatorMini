@@ -13,25 +13,24 @@ print("Loaded API Key:", os.getenv("OPENAI_API_KEY"))
 
 def browser_instructions(prompt):
     my_prompt = """
-    You are an expert in browser automation. Convert the user's request into a JSON list of actions that can be run by a Playwright script.
+    You are a browser automation expert. Convert the user's high-level request into a raw JSON array of Playwright-compatible actions.
 
-    Supported actions:
-    - goto: { "action": "goto", "url": "..." }
-    - type: { "action": "type", "selector": "...", "text": "..." }
-    - click: { "action": "click", "selector": "..." }
-    - press: { "action": "press", "selector": "...", "key": "Enter" }
-    - waitForSelector: { "action": "waitForSelector", "selector": "..." }
-    - screenshot: { "action": "screenshot", "selector": "...", "path": "filename.png" }
-    - extractText: { "action": "extractText", "selector": "..." }
-    - scrollIntoView: { "action": "scrollIntoView", "selector": "..." }
+    Supported actions (strict format):
+    - { "action": "goto", "url": "..." }
+    - { "action": "type", "selector": "...", "text": "..." }
+    - { "action": "click", "selector": "..." }
+    - { "action": "press", "selector": "...", "key": "Enter" }
+    - { "action": "waitForSelector", "selector": "..." }
+    - { "action": "screenshot", "selector": "...", "path": "filename.png" }
+    - { "action": "extractText", "selector": "..." }
+    - { "action": "scrollIntoView", "selector": "..." }
 
-    Requirements:
-    - Use "press" instead of "click" to submit search bars when appropriate.
-    - Use "waitForSelector" before interacting with content that may load dynamically.
-    - Only return valid raw JSON — no code blocks, markdown, or explanation.
-    - Use `press` on the input field itself, not on buttons
-    - If the search leads directly to the page, no click is needed after
-"""
+    Rules:
+    - Always include a waitForSelector before interacting with dynamic elements.
+    - Use press on the input field instead of clicking a search button.
+    - Use clear, specific selectors (IDs > placeholders > classes).
+    - Return only valid JSON — no explanation, markdown, or surrounding text.
+    """
 
     response = openai.ChatCompletion.create(
         model = "gpt-4o-mini",
@@ -49,50 +48,47 @@ def browser_instructions(prompt):
 
 def new_instructions(og_prompt, page_url, page_title, dom_summary, step_history):
     context_prompt = f"""
-    You are a browser automation expert continuing a Playwright script.
+    You are a browser automation expert. Continue a Playwright automation task by returning the next valid JSON step(s).
 
-    🔹 User's original instruction:
+    User goal:
     "{og_prompt}"
 
-    🔹 Current page:
+    Current page:
     - URL: {page_url}
     - Title: {page_title}
 
-    🔹 DOM snapshot (visible elements, JSON list):
+    Visible DOM elements (verified and pre-sanitized):
     {json.dumps(dom_summary, indent=2)}
 
-    🔹 Previously executed steps (do NOT repeat unless necessary):
+    Already Executed steps (DO NOT repeat unless retrying a failed action):
     {json.dumps(step_history, indent=2)}
 
-    Your task:
-    Determine the next JSON action(s) required to progress the original instruction. Only use selectors *exactly as they appear* in the DOM snapshot above — do not guess, invent, or alter attribute names.
+    Instructions:
+    - Return the next JSON step(s) using only selectors from the DOM above.
+    - Do not fabricate or modify selectors — use only those listed.
+    - Always include waitForSelector before interacting.
+    - Prefer selectors in this order: IDs > placeholders > classes/names.
+    - If no further steps are needed or none are valid, return an empty list or an extractText fallback.
+    - If the current page title already matches the user's target (e.g. "Alan Turing - Wikipedia"), then assume the goal is complete — do not repeat clicks.
+    - Only output a raw JSON array. Do NOT include ```json or any formatting. Just return the JSON itself, nothing else.
 
-    Selector priority:
-    1. Use IDs (e.g., input#searchInput)
-    2. Then placeholder (e.g., input[placeholder='Search'])
-    3. Then class or name — only if no better alternative exists
+    Supported actions (strict format):
+    - {{ "action": "goto", "url": "..." }}
+    - {{ "action": "type", "selector": "...", "text": "..." }}
+    - {{ "action": "click", "selector": "..." }}
+    - {{ "action": "press", "selector": "...", "key": "Enter" }}
+    - {{ "action": "waitForSelector", "selector": "..." }}
+    - {{ "action": "screenshot", "selector": "...", "path": "filename.png" }}
+    - {{ "action": "extractText", "selector": "..." }}
+    - {{ "action": "scrollIntoView", "selector": "..." }}
 
-    Supported actions:
-    - goto: {{ "action": "goto", "url": "..." }}
-    - type: {{ "action": "type", "selector": "...", "text": "..." }}
-    - click: {{ "action": "click", "selector": "..." }}
-    - press: {{ "action": "press", "selector": "...", "key": "Enter" }}
-    - waitForSelector: {{ "action": "waitForSelector", "selector": "..." }}
-    - screenshot: {{ "action": "screenshot", "selector": "...", "path": "filename.png" }}
-    - extractText: {{ "action": "extractText", "selector": "..." }}
-    - scrollIntoView: {{ "action": "scrollIntoView", "selector": "..." }}
-
-    Requirements:
-    - Return *only* raw valid JSON array — no markdown, no code blocks, no explanations
-    - Do not repeat past steps unless they are required for continuation
-    - Always use "waitForSelector" before interacting with dynamically loaded elements
-    - Use "press" on the *input field*, not on surrounding buttons
-    - If the task is complete or no action can be taken, return an extractText step or leave the result empty
+    Format:
+    Return a strict RAW JSON array (no markdown, no explanation).
     """
 
 
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",
         messages=[
             { "role": "system", "content": context_prompt }
         ],
@@ -102,6 +98,34 @@ def new_instructions(og_prompt, page_url, page_title, dom_summary, step_history)
     followup = response.choices[0].message.content
     print("GPT CONTINUATION:", followup)
     return followup
+
+
+def clarify_prompt(raw_prompt):
+    system_instruction = """
+    You are a task simplifier. Rewrite vague or natural user commands into direct, specific, and robotic browser instructions.
+
+    Output requirements:
+    - Be concise and clear.
+    - Break complex tasks into sequential sub-actions.
+    - Include target websites if not mentioned (infer sensibly).
+    - Use specific phrases like “Go to”, “Search for”, “Click on”, “Open” etc.
+    - Preserve intent and all original details, but remove ambiguity.
+
+    Examples:
+    - "Look up the weather in NYC" → "Go to google.com, search 'NYC weather today', and read the forecast."
+    - "Find AI news on Bing" → "Go to bing.com, search 'latest AI breakthroughs', and click on the first article."
+    - "Search for apartments in SF" → "Go to apartments.com, search 'apartments in San Francisco', and open the first listing."
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            { "role": "system", "content": system_instruction },
+            { "role": "user", "content": raw_prompt }
+        ],
+        temperature=0.2
+    )
+    return response.choices[0].message.content.strip()
 
 
 
