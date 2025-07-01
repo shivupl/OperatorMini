@@ -1,95 +1,5 @@
-# import json 
-# from playwright.sync_api import sync_playwright
-# from gpt_parser import new_instructions
-
-
-# def run_script(json_script, og_prompt):
-#     from playwright.sync_api import sync_playwright
-#     import json
-#     from gpt_parser import new_instructions
-
-#     actions = json.loads(json_script)
-
-#     with sync_playwright() as p:
-#         browser = p.chromium.launch(headless=False, slow_mo=100)
-#         page = browser.new_page()
-
-#         last_url = "https://placeholder.local"
-#         last_title = ""
-#         step_history = []
-
-#         while True:
-#             for step in actions:
-#                 print("▶️ Executing:", step)
-#                 step_history.append(step)
-
-#                 try:
-#                     match step["action"]:
-#                         case "goto":
-#                             page.goto(step["url"])
-#                         case "type":
-#                             page.fill(step["selector"], step["text"])
-#                         case "click":
-#                             page.click(step["selector"])
-#                         case "press":
-#                             page.press(step["selector"], step["key"])
-#                         case "wait":
-#                             page.wait_for_timeout(step.get("seconds", 2) * 1000)
-#                         case "waitForSelector":
-#                             page.wait_for_selector(step["selector"])
-#                         case "screenshot":
-#                             page.screenshot(path=step["path"])
-#                         case "extractText":
-#                             text = page.locator(step["selector"]).inner_text()
-#                             print("Extracted text:", text)
-#                         case "scrollIntoView":
-#                             page.locator(step["selector"]).scroll_into_view_if_needed()
-#                 except Exception as e:
-#                     print("Error during step:", e)
-#                     return
-
-#                 # Check for page change immediately after this step
-#                 curr_url = page.url
-#                 curr_title = page.title()
-
-#                 if curr_url != last_url or curr_title != last_title:
-#                     print(f"\n🔄 Detected new page: {curr_title} ({curr_url})")
-#                     dom_summary = summarize_dom(page)
-#                     next_json = new_instructions(og_prompt, curr_url, curr_title, dom_summary, step_history)
-#                     try:
-#                         actions = json.loads(next_json)
-#                         last_url = curr_url
-#                         last_title = curr_title
-#                         break  # break out of for-loop and restart with new actions
-#                     except Exception as e:
-#                         print("Failed to parse next actions:", e)
-#                         return
-#             else:
-#                 #If for-loop finished without breaking (i.e., no new page), stop
-#                 break
-
-
-#         browser.close()
-
-
-# def summarize_dom(page, max_elements=50):
-#     elements = page.locator("body *").all()
-#     summary = []
-
-#     for el in elements[:max_elements]:
-#         try:
-#             if el.is_visible():
-#                 tag = el.evaluate("el => el.tagName")
-#                 text = el.inner_text().strip()
-#                 attrs = el.evaluate("el => ({ id: el.id, name: el.name, class: el.className, placeholder: el.placeholder })")
-#                 summary.append({ "tag": tag, "text": text, "attrs": attrs })
-#         except:
-#             continue
-#     print(summary)
-#     return summary
-
 import json
-from gpt_parser import new_instructions
+from gpt_parser import system_instructions, browser_instructions, browser_instructions_from_context
 from playwright.async_api import async_playwright
 
 
@@ -97,7 +7,7 @@ async def run_script(json_script, og_prompt):
     actions = json.loads(json_script)
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, slow_mo=100)
+        browser = await p.chromium.launch(headless=False, slow_mo=1000)
         page = await browser.new_page()
 
         last_url = "https://placeholder.local"
@@ -141,7 +51,10 @@ async def run_script(json_script, og_prompt):
                 if curr_url != last_url or curr_title != last_title:
                     print(f"Detected new page: {curr_title} ({curr_url})")
                     dom_summary = await summarize_dom(page)
-                    next_json = new_instructions(og_prompt, curr_url, curr_title, dom_summary, step_history)
+                    instructions = system_instructions(og_prompt, curr_url, curr_title, dom_summary, step_history)
+                    #next_json = browser_instructions(instructions)
+                    next_json = browser_instructions_from_context(instructions, og_prompt, curr_url, curr_title, dom_summary, step_history)
+                    #next_json = new_instructions(system_instructions, curr_url, curr_title, dom_summary, step_history)
                     try:
                         actions = json.loads(next_json)
                         last_url = curr_url
