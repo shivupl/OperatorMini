@@ -4,11 +4,19 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
-print("hi")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-print("Loaded API Key:", os.getenv("OPENAI_API_KEY"))
-
+def call_llm(system, user=None, model="gpt-4o-mini", temp=0.2):
+    messages = [{"role": "system", "content": system}]
+    if user: messages.append({"role": "user", "content": user})
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages=messages,
+        temperature=temp,
+    )
+    generated = response.choices[0].message.content.strip()
+    print("GENERATED:", generated)
+    return generated
 
 
 def browser_instructions(prompt):
@@ -39,18 +47,8 @@ def browser_instructions(prompt):
     Return a single JSON array containing the ordered steps.
     """
 
-    response = openai.ChatCompletion.create(
-        model = "gpt-4o-mini",
-        messages = [
-            { "role": "system", "content": my_prompt },
-            { "role": "user", "content": prompt }
-        ],
-        temperature=0.2,
-        #response_format={"type": "json_object"},
-    )
-    print( response.choices[0].message.content )
-
-    return response.choices[0].message.content
+    response = call_llm(my_prompt, prompt)
+    return response
 
 
 def clarify_prompt(raw_prompt):
@@ -70,15 +68,9 @@ def clarify_prompt(raw_prompt):
     - "Search for apartments in SF" → "Go to apartments.com, search 'apartments in San Francisco', and open the first listing."
     """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            { "role": "system", "content": system_instruction },
-            { "role": "user", "content": raw_prompt }
-        ],
-        temperature=0.2
-    )
-    return response.choices[0].message.content.strip()
+    response = call_llm(system_instruction, raw_prompt)
+    return response
+
 
 def system_instructions(prompt, page_url, page_title, dom_summary, step_history):
     system_prompt =  f"""
@@ -110,16 +102,9 @@ def system_instructions(prompt, page_url, page_title, dom_summary, step_history)
     #OUTPUT
     Respond with a natural-language step plan only.
     """
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            { "role": "system", "content": system_prompt }
-        ],
-        temperature=0.2
-    )
-    print("SYSTEM INSTRUCTIONS:", response.choices[0].message.content.strip())
-    return response.choices[0].message.content.strip()
 
+    response = call_llm(system_prompt)
+    return response
 
 
 def browser_instructions_from_context(clarified_plan, prompt, page_url, page_title, dom_summary, step_history):
@@ -170,14 +155,5 @@ def browser_instructions_from_context(clarified_plan, prompt, page_url, page_tit
     ]
     """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            { "role": "system", "content": json_generation_prompt }
-        ],
-        temperature=0.2,
-    )
-
-    generated = response.choices[0].message.content.strip()
-    print("new Generated JSON Plan:\n", generated)
-    return generated
+    response = call_llm(json_generation_prompt)
+    return response
